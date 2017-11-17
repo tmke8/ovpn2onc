@@ -1,28 +1,29 @@
 <!doctype html>
 
 <html lang="en">
-<head>
-  <meta charset="utf-8">
-
-  <title>OpenVPN to ONC</title>
-  <meta name="description" content="Convert OpenVPN config files to ONC files">
-
-  <link rel="stylesheet" href="style.css">
-  <script type="module" src="js/scripts.js"></script>
-</head>
-
-<body>
-  <div>
-    <h1>ovpn2onc</h1>
-    <ul>
-      <li>OpenVPN config file (*.ovpn): <input type="file" id="inputopenvpn"></li>
-      <li>Certificates: <input mutliple type="file" id="inputcertificate"></li>
-    </ul>
-    <button id="clickbutton" type="button">Convert</button>
-  </div>
-  <div>
-    <p>Output</p>
-    <textarea readonly id="output" wrap="off" rows="10" cols="50"></textarea>
-  </div>
-</body>
+  <head>
+    <meta charset="utf-8">
+  
+    <title>OpenVPN to ONC</title>
+    <meta name="description" content="Convert OpenVPN config files to ONC files">
+  
+    <link rel="stylesheet" href="style.css">
+    <script type="module" src="js/main.js"></script>
+  </head>
+  
+  <body>
+    <div>
+      <h1>ovpn2onc</h1>
+      <ul>
+        <li>Name for connection: <input type="text" id="connname"></li>
+        <li>OpenVPN config file (*.ovpn): <input type="file" id="inputopenvpn"></li>
+        <li>Certificates: <input mutliple type="file" id="inputcertificate"></li>
+      </ul>
+      <button id="clickbutton" type="button">Convert</button>
+    </div>
+    <div>
+      <p>Output</p>
+      <textarea readonly id="output" wrap="off" rows="10" cols="50"></textarea>
+    </div>
+  </body>
 </html>
