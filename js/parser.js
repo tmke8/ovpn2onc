@@ -1,5 +1,9 @@
+/**
+ * Parse *.ovpn file.
+ */
 export function decode (str) {
-  let out = {}
+  let ovpn = {}
+  let keys = {}
   const re = /^([^ ]+)( (.*))?$/i
   const xmlOpen = /^<([^\/].*)>$/i
   const xmlClose = /^<\/(.*)>$/i
@@ -20,9 +24,10 @@ export function decode (str) {
       if (tag !== xmlTag) {
         throw 'bad xml tag'
       }
-      const key = unsafe(xmlTag)
+      const name = unsafe(xmlTag)
       const value = unsafe(xmlContent)
-      out[key] = value
+      keys[name] = value
+      ovpn[name] = name
       xmlContent = ''
       inXml = false
       continue
@@ -37,10 +42,10 @@ export function decode (str) {
     if (!match) continue
     const key = unsafe(match[1])
     const value = match[2] ? unsafe((match[3] || '')) : true
-    out[key] = value
+    ovpn[key] = value
   }
 
-  return out
+  return [ovpn, keys]
 }
 
 function isQuoted (val) {
