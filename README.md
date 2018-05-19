@@ -2,4 +2,4 @@
 Convert OpenVPN config files to the ONC ChromeOS network config files.
 
 ## How to use
-Download the code and open index.html in Chrome. Follow the instructions there.
+Download the the `index.html` file and open it in Chrome. Follow the instructions there.
