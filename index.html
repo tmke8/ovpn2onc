@@ -7,23 +7,306 @@
     <title>OpenVPN to ONC</title>
     <meta name="description" content="Convert OpenVPN config files to ONC files">
   
-    <link rel="stylesheet" href="style.css">
-    <script type="module" src="js/main.js"></script>
+    <style>
+    #output {
+      background-color: lightgray;
+    }
+    </style>
+    <script>
+
+    function setHandler() {
+      let clickButton = document.getElementById('clickbutton')
+      clickButton.addEventListener('click', handler, false)
+    }
+
+    function handler() {
+      let selectedFile = document.getElementById('inputopenvpn').files[0]
+      let certificates = document.getElementById('inputcertificates').files
+      let connName = document.getElementById('connname').value
+      let output = document.getElementById('output')
+      main(connName, selectedFile, certificates, output)
+    }
+
+    async function main(connName, selectedFile, certificateFiles, output) {
+      if (connName === '') {
+        alert('Please specify a name for the connection.')
+        return
+      }
+      console.log(selectedFile.size + ' bytes')
+      let content = await readFile(selectedFile)
+      let [ovpn, keys] = decode(content)
+      console.log(ovpn)
+      for (const certificateFile of certificateFiles) {
+        keys[certificateFile.name] = await readFile(certificateFile)
+      }
+      let onc = convert(connName, ovpn, keys)
+      output.value = JSON.stringify(onc, null, 2)
+    }
+
+    function readFile(file) {
+      return new Promise(resolve => {
+        let reader = new FileReader()
+        reader.onload = (e => {
+          // callback and remove windows-style newlines
+          resolve(e.target.result.replace(/\r/g, ''))
+        })
+        // start reading
+        reader.readAsText(file)
+      })
+    }
+
+    function decode (str) {
+      let ovpn = {}
+      let keys = {}
+      const re = /^([^ ]+)( (.*))?$/i
+      const xmlOpen = /^<([^\/].*)>$/i
+      const xmlClose = /^<\/(.*)>$/i
+      let xmlTag = ''
+      let inXml = false
+      let xmlContent = ''
+      let lines = str.split(/[\r\n]+/g)
+    
+      for (let line of lines) {
+        if (!line || line.match(/^\s*[;#]/)) continue
+        if (inXml) {
+          const xmlMatch = line.match(xmlClose)
+          if (!xmlMatch) {
+            xmlContent += line + '\n'
+            continue
+          }
+          const tag = xmlMatch[1]
+          if (tag !== xmlTag) {
+            throw 'bad xml tag'
+          }
+          const name = unsafe(xmlTag)
+          const value = unsafe(xmlContent)
+          keys[name] = value
+          ovpn[name] = name
+          xmlContent = ''
+          inXml = false
+          continue
+        }
+        const xmlMatch = line.match(xmlOpen)
+        if (xmlMatch) {
+          inXml = true
+          xmlTag = xmlMatch[1]
+          continue
+        }
+        const match = line.match(re)
+        if (!match) continue
+        const key = unsafe(match[1])
+        const value = match[2] ? unsafe((match[3] || '')) : true
+        ovpn[key] = value
+      }
+    
+      return [ovpn, keys]
+    }
+    
+    function isQuoted (val) {
+      return ((val.charAt(0) === '"' && val.slice(-1) === '"') ||
+        (val.charAt(0) === "'" && val.slice(-1) === "'"))
+    }
+    
+    function unsafe (val, doUnesc) {
+      val = (val || '').trim()
+      if (isQuoted(val)) {
+        // remove the single quotes before calling JSON.parse
+        if (val.charAt(0) === "'") {
+          val = val.substr(1, val.length - 2)
+        }
+        try { val = JSON.parse(val) } catch (_) {}
+      } else {
+        // walk the val to find the first not-escaped ; character
+        var esc = false
+        var unesc = ''
+        for (var i = 0, l = val.length; i < l; i++) {
+          var c = val.charAt(i)
+          if (esc) {
+            if ('\\;#'.indexOf(c) !== -1) {
+              unesc += c
+            } else {
+              unesc += '\\' + c
+            }
+            esc = false
+          } else if (';#'.indexOf(c) !== -1) {
+            break
+          } else if (c === '\\') {
+            esc = true
+          } else {
+            unesc += c
+          }
+        }
+        if (esc) {
+          unesc += '\\'
+        }
+        return unesc
+      }
+      return val
+    }
+    
+    const oncBasics = {
+      'Type': 'UnencryptedConfiguration',
+      'Certificates': [],
+      'NetworkConfigurations': []
+    }
+    
+    function convert(name, ovpn, keys) {
+      if (!ovpn.client) {
+        console.warn('Is this a server file?')
+      }
+      let params = {}
+    
+      // Add certificates
+      let certs = []
+      let [cas, caGuids] = createCerts(keys, ovpn['ca'], 'Authority')
+      params['ServerCARefs'] = caGuids
+      certs = certs.concat(cas)
+      let [clientCerts, clientCertGuids] = createCerts(keys, ovpn['cert'], 'Client')
+      if (clientCerts[0]) {
+        params['ClientCertType'] = 'Ref'
+        params['ClientCertRef'] = clientCertGuids[0]
+        certs.push(clientCerts[0])
+      } else {
+        params['ClientCertType'] = 'None'
+      }
+    
+      // Add parameters
+      let remote = ovpn.remote.split(' ')
+      const host = remote[0]
+      if (remote[1]) params['Port'] = remote[1]
+      if (ovpn['auth-user-pass']) params['UserAuthenticationType'] = 'Password'
+      if (ovpn['comp-lzo'] && ovpn['comp-lzo'] !== 'no') {
+        params['CompLZO'] = 'true'
+      } else {
+        params['CompLZO'] = 'false'
+      }
+      if (ovpn['persist-key']) params['SaveCredentials'] = true
+      if (ovpn['tls-auth']) {
+        let authKey = ovpn['tls-auth'].split(' ')
+        let keyString = keys[authKey[0]]
+        if (!keyString) {
+          alert("Please provide the file '" + authKey[0] + "' in 'Certificates and keys'")
+        }
+        params['TLSAuthContents'] = convertKey(keyString)
+        if (authKey[1]) params['KeyDirection'] = authKey[1]
+      }
+      if (ovpn['verify-x509-name']) {
+        params['VerifyX509'] = {
+          'Name': ovpn['verify-x509-name']
+        }
+      }
+      // set parameters if they exist in the ovpn config
+      let conditionalSet = (ovpnName, oncName, type='str') => {
+        if (ovpn[ovpnName]) {
+          const raw = ovpn[ovpnName]
+          let value
+          switch (type) {
+            case 'int':
+              value = Number(raw)
+              break
+            default:
+              value = raw
+          }
+          params[oncName] = value
+        }
+      }
+      conditionalSet('port', 'Port', 'int')
+      conditionalSet('proto', 'Proto')
+      conditionalSet('key-direction', 'KeyDirection')
+      conditionalSet('remote-cert-tls', 'RemoteCertTLS')
+      conditionalSet('cipher', 'Cipher')
+      conditionalSet('auth', 'Auth')
+      conditionalSet('auth-retry', 'AuthRetry')
+      conditionalSet('reneg-sec', 'RenegSec', 'int')
+    
+      // Put together network configuration
+      let config = {
+        'GUID': `{${uuidv4()}}`,
+        'Name': name,
+        'Type': 'VPN',
+        'VPN': {
+          'Type': 'OpenVPN',
+          'Host': host,
+          'OpenVPN': params
+        }
+      }
+    
+      // Put everything together
+      let onc = Object.assign({}, oncBasics)  // create copy
+      onc.NetworkConfigurations = [config]
+      onc.Certificates = certs
+      return onc
+    }
+    
+    /**
+     * Create UUID (from Stackoverflow).
+     */
+    function uuidv4() {
+      return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c=>
+        (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
+      )
+    }
+    
+    function convertKey(key) {
+      let lines = key.split(/\n/g)
+      let out = ''
+      for (let line of lines) {
+        // filter out empty lines and lines with comments
+        if (!line || line.match(/^\s*[;#]/)) continue
+        out += line + '\n'
+      }
+      return out
+    }
+    
+    function extractCas(str) {
+      let splits = str.replace(/\n/g, '').split('-----BEGIN CERTIFICATE-----')
+      console.log(splits)
+      let cas = []
+      for (const s of splits) {
+        if (s.includes('-----END CERTIFICATE-----')) {
+          cas.push(s.split('-----END CERTIFICATE-----')[0])
+        }
+      }
+      return cas
+    }
+    
+    function createCerts(keys, certName, certType) {
+      let certs = []
+      let certGuids = []
+      if (certName) {
+        let cert = keys[certName]
+        if (!cert) {
+          alert("Please provide the file '" + certName + "' in 'Certificates and keys'")
+        }
+        let rawCerts = extractCas(cert)
+        for (const cert of rawCerts) {
+          const guid = `{${uuidv4()}}`
+          certGuids.push(guid)
+          certs.push({
+            'GUID': guid,
+            'Type': certType,
+            'X509': cert
+          })
+        }
+      }
+      return [certs, certGuids]
+    }
+    </script>
   </head>
   
-  <body>
+  <body onload="setHandler()">
     <div>
       <h1>ovpn2onc</h1>
       <ul>
-        <li>Name for connection: <input type="text" id="connname"></li>
+        <li>Name for connection (can be chosen freely): <input type="text" id="connname"></li>
         <li>OpenVPN config file (*.ovpn): <input type="file" id="inputopenvpn"></li>
-        <li><label for="inputcertificates">Certificates (can be multiple files):</label> <input type="file" id="inputcertificates" multiple></li>
+        <li><label for="inputcertificates">Certificates and keys (can be multiple files):</label> <input type="file" id="inputcertificates" multiple></li>
       </ul>
       <button id="clickbutton" type="button">Convert</button>
     </div>
     <div>
-      <p>Output</p>
-      <textarea readonly id="output" wrap="off" rows="10" cols="50"></textarea>
+      <p>Output (copy this into a new file and load it in ChromeOS)</p>
+      <textarea readonly id="output" wrap="off" rows="20" cols="100"></textarea>
     </div>
   </body>
 </html>
