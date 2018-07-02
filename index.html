@@ -14,12 +14,12 @@
     </style>
     <script>
 
-    function setHandler() {
+    function setHandler () {
       let clickButton = document.getElementById('clickbutton')
       clickButton.addEventListener('click', handler, false)
     }
 
-    function handler() {
+    function handler () {
       let selectedFile = document.getElementById('inputopenvpn').files[0]
       let certificates = document.getElementById('inputcertificates').files
       let connName = document.getElementById('connname').value
@@ -27,7 +27,7 @@
       main(connName, selectedFile, certificates, output)
     }
 
-    async function main(connName, selectedFile, certificateFiles, output) {
+    async function main (connName, selectedFile, certificateFiles, output) {
       if (connName === '') {
         alert('Please specify a name for the connection.')
         return
@@ -43,13 +43,13 @@
       output.value = JSON.stringify(onc, null, 2)
     }
 
-    function readFile(file) {
+    function readFile (file) {
       return new Promise(resolve => {
         let reader = new FileReader()
-        reader.onload = (e => {
+        reader.onload = e => {
           // callback and remove windows-style newlines
           resolve(e.target.result.replace(/\r/g, ''))
-        })
+        }
         // start reading
         reader.readAsText(file)
       })
@@ -104,7 +104,7 @@
     
     function isQuoted (val) {
       return ((val.charAt(0) === '"' && val.slice(-1) === '"') ||
-        (val.charAt(0) === "'" && val.slice(-1) === "'"))
+            (val.charAt(0) === "'" && val.slice(-1) === "'"))
     }
     
     function unsafe (val, doUnesc) {
@@ -150,7 +150,7 @@
       'NetworkConfigurations': []
     }
     
-    function convert(name, ovpn, keys) {
+    function convert (name, ovpn, keys) {
       if (!ovpn.client) {
         console.warn('Is this a server file?')
       }
@@ -196,7 +196,7 @@
         }
       }
       // set parameters if they exist in the ovpn config
-      let conditionalSet = (ovpnName, oncName, type='str') => {
+      let conditionalSet = (ovpnName, oncName, type = 'str') => {
         if (ovpn[ovpnName]) {
           const raw = ovpn[ovpnName]
           let value
@@ -241,13 +241,13 @@
     /**
      * Create UUID (from Stackoverflow).
      */
-    function uuidv4() {
-      return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c=>
-        (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
-      )
+    function uuidv4 () {
+      return ([1e7] + -1e3 + -4e3 + -8e3 + -1e11).replace(/[018]/g, c =>
+            (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
+          )
     }
     
-    function convertKey(key) {
+    function convertKey (key) {
       let lines = key.split(/\n/g)
       let out = ''
       for (let line of lines) {
@@ -258,7 +258,7 @@
       return out
     }
     
-    function extractCas(str) {
+    function extractCas (str) {
       let splits = str.replace(/\n/g, '').split('-----BEGIN CERTIFICATE-----')
       console.log(splits)
       let cas = []
@@ -270,7 +270,7 @@
       return cas
     }
     
-    function createCerts(keys, certName, certType) {
+    function createCerts (keys, certName, certType) {
       let certs = []
       let certGuids = []
       if (certName) {
