@@ -14,11 +14,19 @@
     </style>
     <script>
 
+    /**
+     * Register the function `handler` to be called when the `Convert` button is
+     * pressed.
+     */
     function setHandler () {
       let clickButton = document.getElementById('clickbutton')
       clickButton.addEventListener('click', handler, false)
     }
 
+    /**
+     * Read parameters and pass them to the `main` function. This function is
+     * called when the `Convert` button is clicked.
+     */
     function handler () {
       let selectedFile = document.getElementById('inputopenvpn').files[0]
       let certificates = document.getElementById('inputcertificates').files
@@ -27,6 +35,17 @@
       main(connName, selectedFile, certificates, output)
     }
 
+    /**
+     * Read, convert and print result. This function calls other functions
+     * to first read everything, then convert it and finally print the result.
+     *
+     * The function is `async` because it uses `await` when reading files.
+     *
+     * @param {String} connName         Name of the connection
+     * @param {File}   selectedFile     File object for the ovpn file
+     * @param {Array}  certificateFiles List of file objects for the certificates
+     * @param {Object} output           HTML element where the output should go
+     */
     async function main (connName, selectedFile, certificateFiles, output) {
       if (connName === '') {
         alert('Please specify a name for the connection.')
@@ -43,6 +62,13 @@
       output.value = JSON.stringify(onc, null, 2)
     }
 
+    /**
+     * Return a promise to read a file as text.
+     *
+     * @param {File} file A file object
+     *
+     * @return {Promise} A promise with the contents of the file
+     */
     function readFile (file) {
       return new Promise(resolve => {
         let reader = new FileReader()
@@ -55,6 +81,18 @@
       })
     }
 
+    /**
+     * Decode an OVPN file. Extract all the key-value pairs and keys
+     * that are written inside XML tags.
+     *
+     * The key-value pairs are written into an object. The keys are also
+     * written into an object with the the XML tag name as the key.
+     *
+     * @param {String} str The contents of the ovpn file as a string.
+     *
+     * @return {Array} An array that contains the key-value pairs and
+     *                 the keys.
+     */
     function decode (str) {
       let ovpn = {}
       let keys = {}
@@ -298,8 +336,8 @@
     <div>
       <h1>ovpn2onc</h1>
       <ul>
-        <li>Name for connection (can be chosen freely): <input type="text" id="connname"></li>
-        <li>OpenVPN config file (*.ovpn): <input type="file" id="inputopenvpn"></li>
+        <li><label for="connname">Name for connection (can be chosen freely):</label> <input type="text" id="connname"></li>
+        <li><label for="inputopenvpn">OpenVPN config file (*.ovpn):</label> <input type="file" id="inputopenvpn"></li>
         <li><label for="inputcertificates">Certificates and keys (can be multiple files):</label> <input type="file" id="inputcertificates" multiple></li>
       </ul>
       <button id="clickbutton" type="button">Convert</button>
