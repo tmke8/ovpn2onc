@@ -42,18 +42,18 @@
      * The function is `async` because it uses `await` when reading files.
      *
      * @param {String} connName         Name of the connection
-     * @param {File}   selectedFile     File object for the ovpn file
+     * @param {File}   ovpnFile         File object for the ovpn file
      * @param {Array}  certificateFiles List of file objects for the certificates
      * @param {Object} output           HTML element where the output should go
      */
-    async function main (connName, selectedFile, certificateFiles, output) {
+    async function main (connName, ovpnFile, certificateFiles, output) {
       if (connName === '') {
         alert('Please specify a name for the connection.')
         return
       }
       console.log(selectedFile.size + ' bytes')
-      let content = await readFile(selectedFile)
-      let [ovpn, keys] = decode(content)
+      let ovpnContent = await readFile(ovpnFile)
+      let [ovpn, keys] = parseOvpn(ovpnContent)
       console.log(ovpn)
       for (const certificateFile of certificateFiles) {
         keys[certificateFile.name] = await readFile(certificateFile)
@@ -82,7 +82,7 @@
     }
 
     /**
-     * Decode an OVPN file. Extract all the key-value pairs and keys
+     * Parse an OVPN file. Extract all the key-value pairs and keys
      * that are written inside XML tags.
      *
      * The key-value pairs are written into an object. The keys are also
@@ -93,47 +93,60 @@
      * @return {Array} An array that contains the key-value pairs and
      *                 the keys.
      */
-    function decode (str) {
+    function parseOvpn (str) {
       let ovpn = {}
       let keys = {}
-      const re = /^([^ ]+)( (.*))?$/i
-      const xmlOpen = /^<([^\/].*)>$/i
-      const xmlClose = /^<\/(.*)>$/i
+      // define regexes for properties, opening xml tag and closing xml tag
+      const reProperty = /^([^ ]+)( (.*))?$/i
+      const reXmlOpen = /^<([^\/].*)>$/i
+      const reXmlClose = /^<\/(.*)>$/i
+
+      // temporary variables for handling xml tags
       let xmlTag = ''
       let inXml = false
       let xmlContent = ''
+
       let lines = str.split(/[\r\n]+/g)
     
       for (let line of lines) {
+        // skip line if it is empty or begins with '#' or ';'
         if (!line || line.match(/^\s*[;#]/)) continue
-        if (inXml) {
-          const xmlMatch = line.match(xmlClose)
+        if (inXml) {  // an XML tag was opened and hasn't been closed yet
+          const xmlMatch = line.match(reXmlClose)
           if (!xmlMatch) {
+            // no closing tag -> add content to `xmlContent`
             xmlContent += line + '\n'
             continue
           }
           const tag = xmlMatch[1]
           if (tag !== xmlTag) {
+            alert('Cannot parse ovpn file.')
             throw 'bad xml tag'
           }
-          const name = unsafe(xmlTag)
-          const value = unsafe(xmlContent)
+          // closing tag was found
+          // make sure the tag name and the contents are safe
+          const name = makeSafe(xmlTag)
+          const value = makeSafe(xmlContent)
+          // store everything and reset the xml variables
           keys[name] = value
           ovpn[name] = name
           xmlContent = ''
           inXml = false
           continue
         }
-        const xmlMatch = line.match(xmlOpen)
+        const xmlMatch = line.match(reXmlOpen)
         if (xmlMatch) {
+          // an xml tag was opened
           inXml = true
           xmlTag = xmlMatch[1]
           continue
         }
-        const match = line.match(re)
+        // check if the line contains a property
+        const match = line.match(reProperty)
         if (!match) continue
-        const key = unsafe(match[1])
-        const value = match[2] ? unsafe((match[3] || '')) : true
+        // make sure everything is safe and then store it
+        const key = makeSafe(match[1])
+        const value = match[2] ? makeSafe((match[3] || '')) : true
         ovpn[key] = value
       }
     
@@ -145,7 +158,7 @@
             (val.charAt(0) === "'" && val.slice(-1) === "'"))
     }
     
-    function unsafe (val, doUnesc) {
+    function makeSafe (val, doUnesc) {
       val = (val || '').trim()
       if (isQuoted(val)) {
         // remove the single quotes before calling JSON.parse
@@ -187,7 +200,15 @@
       'Certificates': [],
       'NetworkConfigurations': []
     }
-    
+
+    /**
+     * Convert the parsed OVPN file to ONC structure
+     *
+     * @param {string} name Name of the connection
+     * @param {Object} ovpn The parsed OVPN file
+     * @param {Object} keys Strings with keys, indexed by key name
+     * @return {Object} The converted ONC structure
+     */
     function convert (name, ovpn, keys) {
       if (!ovpn.client) {
         console.warn('Is this a server file?')
@@ -284,7 +305,10 @@
             (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
           )
     }
-    
+
+    /**
+     * Replace newlines with explicit `\n` and filter out comments
+     */
     function convertKey (key) {
       let lines = key.split(/\n/g)
       let out = ''
@@ -295,7 +319,10 @@
       }
       return out
     }
-    
+
+    /**
+     * Find all certificates in a string and extract them
+     */
     function extractCas (str) {
       let splits = str.replace(/\n/g, '').split('-----BEGIN CERTIFICATE-----')
       console.log(splits)
