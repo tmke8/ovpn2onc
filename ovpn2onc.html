@@ -19,8 +19,8 @@
      * pressed.
      */
     function setHandler () {
-      let clickButton = document.getElementById('clickbutton')
-      clickButton.addEventListener('click', handler, false)
+      let convertButton = document.getElementById('convertbutton')
+      convertButton.addEventListener('click', handler, false)
     }
 
     /**
@@ -363,11 +363,20 @@
     <div>
       <h1>ovpn2onc</h1>
       <ul>
-        <li><label for="connname">Name for connection (can be chosen freely):</label> <input type="text" id="connname"></li>
-        <li><label for="inputopenvpn">OpenVPN config file (*.ovpn):</label> <input type="file" id="inputopenvpn"></li>
-        <li><label for="inputcertificates">Certificates and keys (can be multiple files):</label> <input type="file" id="inputcertificates" multiple></li>
+        <li>
+          <label for="connname">Name for connection (can be chosen freely):</label>
+          <input type="text" id="connname">
+        </li>
+        <li>
+          <label for="inputopenvpn">OpenVPN config file (*.ovpn):</label>
+          <input type="file" id="inputopenvpn">
+        </li>
+        <li>
+          <label for="inputcertificates">Certificates and keys (can be multiple files):</label>
+          <input type="file" id="inputcertificates" multiple>
+        </li>
       </ul>
-      <button id="clickbutton" type="button">Convert</button>
+      <button id="convertbutton" type="button">Convert</button>
     </div>
     <div>
       <p>Output (copy this into a new file and load it in ChromeOS)</p>
