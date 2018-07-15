@@ -58,7 +58,7 @@
       for (const certificateFile of certificateFiles) {
         keys[certificateFile.name] = await readFile(certificateFile)
       }
-      let onc = convert(connName, ovpn, keys)
+      let onc = constructOnc(connName, ovpn, keys)
       output.value = JSON.stringify(onc, null, 2)
     }
 
@@ -202,14 +202,14 @@
     }
 
     /**
-     * Convert the parsed OVPN file to ONC structure
+     * Construct the ONC structure from the name, the parsed ovpn file and the keys
      *
      * @param {string} name Name of the connection
      * @param {Object} ovpn The parsed OVPN file
      * @param {Object} keys Strings with keys, indexed by key name
      * @return {Object} The converted ONC structure
      */
-    function convert (name, ovpn, keys) {
+    function constructOnc (name, ovpn, keys) {
       if (!ovpn.client) {
         console.warn('Is this a server file?')
       }
