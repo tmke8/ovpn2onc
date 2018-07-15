@@ -51,7 +51,7 @@
         alert('Please specify a name for the connection.')
         return
       }
-      console.log(selectedFile.size + ' bytes')
+      console.log(ovpnFile.size + ' bytes')
       let ovpnContent = await readFile(ovpnFile)
       let [ovpn, keys] = parseOvpn(ovpnContent)
       console.log(ovpn)
