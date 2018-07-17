@@ -220,11 +220,13 @@
       let [cas, caGuids] = createCerts(keys, ovpn['ca'], 'Authority')
       params['ServerCARefs'] = caGuids
       certs = certs.concat(cas)
-      let [clientCerts, clientCertGuids] = createCerts(keys, ovpn['cert'], 'Client')
-      if (clientCerts[0]) {
-        params['ClientCertType'] = 'Ref'
-        params['ClientCertRef'] = clientCertGuids[0]
-        certs.push(clientCerts[0])
+      let [clientCerts, clientCertGuids] = createCerts(keys, ovpn['cert'], 'Authority')
+      if (clientCerts) {
+        params['ClientCertType'] = 'Pattern'
+        params['ClientCertPattern'] = {
+          'IssuerCARef': clientCertGuids
+        }
+        certs = certs.concat(clientCerts)
       } else {
         params['ClientCertType'] = 'None'
       }
@@ -344,14 +346,16 @@
           alert("Please provide the file '" + certName + "' in 'Certificates and keys'")
         }
         let rawCerts = extractCas(cert)
+        const format = (certType === 'Authority') ? 'X509' : 'PKCS12'
         for (const cert of rawCerts) {
           const guid = `{${uuidv4()}}`
           certGuids.push(guid)
-          certs.push({
+          let oncCert = {
             'GUID': guid,
-            'Type': certType,
-            'X509': cert
-          })
+            'Type': certType
+          }
+          oncCert[format] = cert
+          certs.push(oncCert)
         }
       }
       return [certs, certGuids]
