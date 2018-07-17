@@ -251,12 +251,26 @@
         params['TLSAuthContents'] = convertKey(keyString)
         if (authKey[1]) params['KeyDirection'] = authKey[1]
       }
-      // TODO: figure out what to do with this
-      // if (ovpn['verify-x509-name']) {
-      //   params['VerifyX509'] = {
-      //     'Name': ovpn['verify-x509-name']
-      //   }
-      // }
+      if (ovpn['verify-x509-name']) {
+        const x509String = ovpn['verify-x509-name']
+        let x509 = {}
+        if (x509String.includes("'")) {
+          // the name is quoted with '
+          const parts = x509String.split("'")
+          x509['Name'] = `'${parts[1]}'`
+          if (parts[2]) {
+            x509['Type'] = parts[2].trim()
+          }
+        } else {
+          const parts = x509String.split(' ')
+          x509['Name'] = parts[0]
+          if (parts[1]) {
+            x509['Type'] = parts[1]
+          }
+        }
+        params['VerifyX509'] = x509
+      }
+
       // set parameters if they exist in the ovpn config
       let conditionalSet = (ovpnName, oncName, type = 'str') => {
         if (ovpn[ovpnName]) {
