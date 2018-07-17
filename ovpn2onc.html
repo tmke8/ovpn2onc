@@ -234,7 +234,7 @@
       // Add parameters
       let remote = ovpn.remote.split(' ')
       const host = remote[0]
-      if (remote[1]) params['Port'] = remote[1]
+      if (remote[1]) params['Port'] = Number(remote[1])
       if (ovpn['auth-user-pass']) params['UserAuthenticationType'] = 'Password'
       if (ovpn['comp-lzo'] && ovpn['comp-lzo'] !== 'no') {
         params['CompLZO'] = 'true'
@@ -251,11 +251,12 @@
         params['TLSAuthContents'] = convertKey(keyString)
         if (authKey[1]) params['KeyDirection'] = authKey[1]
       }
-      if (ovpn['verify-x509-name']) {
-        params['VerifyX509'] = {
-          'Name': ovpn['verify-x509-name']
-        }
-      }
+      // TODO: figure out what to do with this
+      // if (ovpn['verify-x509-name']) {
+      //   params['VerifyX509'] = {
+      //     'Name': ovpn['verify-x509-name']
+      //   }
+      // }
       // set parameters if they exist in the ovpn config
       let conditionalSet = (ovpnName, oncName, type = 'str') => {
         if (ovpn[ovpnName]) {
