@@ -126,7 +126,7 @@
           // closing tag was found
           // make sure the tag name and the contents are safe
           const name = makeSafe(xmlTag)
-          const value = makeSafe(xmlContent)
+          const value = xmlContent
           // store everything and reset the xml variables
           keys[name] = value
           ovpn[name] = name
@@ -146,7 +146,7 @@
         if (!match) continue
         // make sure everything is safe and then store it
         const key = makeSafe(match[1])
-        const value = match[2] ? makeSafe((match[3] || '')) : true
+        const value = match[2] ? (match[3] || '') : true
         ovpn[key] = value
       }
     
@@ -257,7 +257,7 @@
         if (x509String.includes("'")) {
           // the name is quoted with '
           const parts = x509String.split("'")
-          x509['Name'] = `'${parts[1]}'`
+          x509['Name'] = parts[1]
           if (parts[2]) {
             x509['Type'] = parts[2].trim()
           }
