@@ -158,6 +158,11 @@
             (val.charAt(0) === "'" && val.slice(-1) === "'"))
     }
     
+    /**
+     * This function is supposed to prevent any exploits via the object keys
+     *
+     * It's probably complete overkill.
+     */
     function makeSafe (val, doUnesc) {
       val = (val || '').trim()
       if (isQuoted(val)) {
@@ -202,25 +207,28 @@
     }
 
     /**
-     * Construct the ONC structure from the name, the parsed ovpn file and the keys
+     * Convert the keys from the parsed OVPN file into ONC keys
      *
-     * @param {string} name Name of the connection
-     * @param {Object} ovpn The parsed OVPN file
      * @param {Object} keys Strings with keys, indexed by key name
-     * @return {Object} The converted ONC structure
+     * @param {Object} ovpn The parsed OVPN file
+     * @return {Object} ONC parameters and a list of converted certificates
      */
-    function constructOnc (name, ovpn, keys) {
-      if (!ovpn.client) {
-        console.warn('Is this a server file?')
-      }
+    function convertKeys (keys, ovpn) {
       let params = {}
-    
+
       // Add certificates
       let certs = []
-      let [cas, caGuids] = createCerts(keys, ovpn['ca'], 'Authority')
+
+      // Server certificate
+      // TODO: check whether the type should be 'Authority'
+      let [cas, caGuids] = constructCerts(keys, ovpn['ca'], 'Authority')
       params['ServerCARefs'] = caGuids
       certs = certs.concat(cas)
-      let [clientCerts, clientCertGuids] = createCerts(keys, ovpn['cert'], 'Authority')
+
+      // Client certificate
+      // TODO: handle other types of client certificates
+      let [clientCerts, clientCertGuids] = constructCerts(keys, ovpn['cert'],
+                                                       'Authority')
       if (clientCerts) {
         params['ClientCertType'] = 'Pattern'
         params['ClientCertPattern'] = {
@@ -230,6 +238,32 @@
       } else {
         params['ClientCertType'] = 'None'
       }
+
+      // TLS auth
+      if (ovpn['tls-auth']) {
+        let authKey = ovpn['tls-auth'].split(' ')
+        let keyString = keys[authKey[0]]
+        if (!keyString) {
+          alert("Please provide the file '" + authKey[0] + "' in 'Certificates and keys'")
+        }
+        params['TLSAuthContents'] = convertKey(keyString)
+        if (authKey[1]) params['KeyDirection'] = authKey[1]
+      }
+      return [params, certs]
+    }
+
+
+    /**
+     * Convert the parsed ovpn file into the ONC structure
+     *
+     * @param {Object} ovpn The parsed OVPN file
+     * @return {Array} An array with the host and an object with the parameters
+     */
+    function convertToOnc (ovpn) {
+      if (!ovpn.client) {
+        console.warn('Is this a server file?')
+      }
+      let params = {}
     
       // Add parameters
       let remote = ovpn.remote.split(' ')
@@ -242,15 +276,6 @@
         params['CompLZO'] = 'false'
       }
       if (ovpn['persist-key']) params['SaveCredentials'] = true
-      if (ovpn['tls-auth']) {
-        let authKey = ovpn['tls-auth'].split(' ')
-        let keyString = keys[authKey[0]]
-        if (!keyString) {
-          alert("Please provide the file '" + authKey[0] + "' in 'Certificates and keys'")
-        }
-        params['TLSAuthContents'] = convertKey(keyString)
-        if (authKey[1]) params['KeyDirection'] = authKey[1]
-      }
       if (ovpn['verify-x509-name']) {
         const x509String = ovpn['verify-x509-name']
         let x509 = {}
@@ -294,6 +319,24 @@
       conditionalSet('auth', 'Auth')
       conditionalSet('auth-retry', 'AuthRetry')
       conditionalSet('reneg-sec', 'RenegSec', 'int')
+
+      return [host, params]
+    }
+
+
+    /**
+     * Construct the ONC structure from the name, the parsed ovpn file and the keys
+     *
+     * @param {string} name Name of the connection
+     * @param {Object} ovpn The parsed OVPN file
+     * @param {Object} keys Strings with keys, indexed by key name
+     * @return {Object} The converted ONC structure
+     */
+    function constructOnc (name, ovpn, keys) {
+      let [host, params] = convertToOnc(ovpn)
+      let [certParams, certs] = convertKeys(keys, ovpn)
+      // merge parameters
+      params = Object.assign({}, params, certParams)
     
       // Put together network configuration
       let config = {
@@ -351,8 +394,17 @@
       }
       return cas
     }
-    
-    function createCerts (keys, certName, certType) {
+
+    /**
+     * Construct certificates in the ONC format
+     *
+     * @param {Object} keys     Strings with keys, indexed by key name
+     * @param {string} certName The index for the keys object
+     * @param {string} certType Type of the certificate: 'Authority', 'Client' or
+     *                          'Server'
+     * @return {Array} An array of certificates and an array of corresponding IDs
+     */
+    function constructCerts (keys, certName, certType) {
       let certs = []
       let certGuids = []
       if (certName) {
