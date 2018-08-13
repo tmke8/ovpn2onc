@@ -212,11 +212,11 @@
     /**
      * Convert the keys from the parsed OVPN file into ONC keys
      *
-     * @param {Object} keys Strings with keys, indexed by key name
-     * @param {Object} ovpn The parsed OVPN file
+     * @param {Object} keys     Strings with keys, indexed by key name
+     * @param {Object} keynames Object with the key names
      * @return {Object} ONC parameters and a list of converted certificates
      */
-    function convertKeys (keys, ovpn) {
+    function convertKeys (keys, keyNames) {
       let params = {}
 
       // Add certificates
@@ -224,15 +224,16 @@
 
       // Server certificate
       // TODO: check whether the type should be 'Authority'
-      let [cas, caGuids] = constructCerts(keys, ovpn['ca'], 'Authority')
+      let [cas, caGuids] = constructCerts(keys, keyNames.certificateAuthorities,
+                                          'Authority')
       params['ServerCARefs'] = caGuids
       certs = certs.concat(cas)
 
       // Client certificate
-      // TODO: handle other types of client certificates
-      let [clientCerts, clientCertGuids] = constructCerts(keys, ovpn['cert'],
-                                                       'Authority')
-      if (clientCerts) {
+      if (keyNames.clientCertificates) {
+        // TODO: handle other types of client certificates
+        let [clientCerts, clientCertGuids] = constructCerts(
+            keys, keyNames.clientCertificates, 'Authority')
         params['ClientCertType'] = 'Pattern'
         params['ClientCertPattern'] = {
           'IssuerCARef': clientCertGuids
@@ -243,8 +244,8 @@
       }
 
       // TLS auth
-      if (ovpn['tls-auth']) {
-        let authKey = ovpn['tls-auth'].split(' ')
+      if (keyNames.tlsAuth) {
+        let authKey = keyNames.tlsAuth.split(' ')
         let keyString = keys[authKey[0]]
         if (!keyString) {
           alert(`Please provide the file '${authKey[0]}' in 'Certificates and keys'`)
@@ -323,7 +324,13 @@
       conditionalSet('auth-retry', 'AuthRetry')
       conditionalSet('reneg-sec', 'RenegSec', 'int')
 
-      return [host, params]
+      const keyNames = {
+        'certificateAuthorities': ovpn['ca'],
+        'clientCertificates': ovpn['cert'],
+        'tlsAuth': ovpn['tls-auth'],
+      }
+
+      return [host, params, keyNames]
     }
 
 
@@ -336,8 +343,8 @@
      * @return {Object} The converted ONC structure
      */
     function constructOnc (name, ovpn, keys) {
-      let [host, params] = convertToOnc(ovpn)
-      let [certParams, certificates] = convertKeys(keys, ovpn)
+      let [host, params, keyNames] = convertToOnc(ovpn)
+      let [certParams, certificates] = convertKeys(keys, keyNames)
       // merge parameters
       params = Object.assign({}, params, certParams)
 
