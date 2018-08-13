@@ -3,17 +3,16 @@
 <html lang="en">
   <head>
     <meta charset="utf-8">
-  
+
     <title>OpenVPN to ONC</title>
     <meta name="description" content="Convert OpenVPN config files to ONC files">
-  
+
     <style>
     #output {
       background-color: lightgray;
     }
     </style>
     <script>
-
     /**
      * Register the function `handler` to be called when the `Convert` button is
      * pressed.
@@ -22,6 +21,7 @@
       let convertButton = document.getElementById('convertbutton')
       convertButton.addEventListener('click', handler, false)
     }
+
 
     /**
      * Read parameters and pass them to the `main` function. This function is
@@ -34,6 +34,7 @@
       let output = document.getElementById('output')
       main(connName, selectedFile, certificates, output)
     }
+
 
     /**
      * Read, convert and print result. This function calls other functions
@@ -62,6 +63,7 @@
       output.value = JSON.stringify(onc, null, 2)
     }
 
+
     /**
      * Return a promise to read a file as text.
      *
@@ -80,6 +82,7 @@
         reader.readAsText(file)
       })
     }
+
 
     /**
      * Parse an OVPN file. Extract all the key-value pairs and keys
@@ -107,7 +110,7 @@
       let xmlContent = ''
 
       let lines = str.split(/[\r\n]+/g)
-    
+
       for (let line of lines) {
         // skip line if it is empty or begins with '#' or ';'
         if (!line || line.match(/^\s*[;#]/)) continue
@@ -149,15 +152,20 @@
         const value = match[2] ? (match[3] || '') : true
         ovpn[key] = value
       }
-    
+
       return [ovpn, keys]
     }
-    
+
+
+    /**
+     * Check if string is quoted
+     */
     function isQuoted (val) {
       return ((val.charAt(0) === '"' && val.slice(-1) === '"') ||
             (val.charAt(0) === "'" && val.slice(-1) === "'"))
     }
-    
+
+
     /**
      * This function is supposed to prevent any exploits via the object keys
      *
@@ -199,12 +207,7 @@
       }
       return val
     }
-    
-    const oncBasics = {
-      'Type': 'UnencryptedConfiguration',
-      'Certificates': [],
-      'NetworkConfigurations': []
-    }
+
 
     /**
      * Convert the keys from the parsed OVPN file into ONC keys
@@ -244,7 +247,7 @@
         let authKey = ovpn['tls-auth'].split(' ')
         let keyString = keys[authKey[0]]
         if (!keyString) {
-          alert("Please provide the file '" + authKey[0] + "' in 'Certificates and keys'")
+          alert(`Please provide the file '${authKey[0]}' in 'Certificates and keys'`)
         }
         params['TLSAuthContents'] = convertKey(keyString)
         if (authKey[1]) params['KeyDirection'] = authKey[1]
@@ -264,7 +267,7 @@
         console.warn('Is this a server file?')
       }
       let params = {}
-    
+
       // Add parameters
       let remote = ovpn.remote.split(' ')
       const host = remote[0]
@@ -334,12 +337,12 @@
      */
     function constructOnc (name, ovpn, keys) {
       let [host, params] = convertToOnc(ovpn)
-      let [certParams, certs] = convertKeys(keys, ovpn)
+      let [certParams, certificates] = convertKeys(keys, ovpn)
       // merge parameters
       params = Object.assign({}, params, certParams)
-    
+
       // Put together network configuration
-      let config = {
+      let networkConfiguration = {
         'GUID': `{${uuidv4()}}`,
         'Name': name,
         'Type': 'VPN',
@@ -349,14 +352,16 @@
           'OpenVPN': params
         }
       }
-    
+
       // Put everything together
-      let onc = Object.assign({}, oncBasics)  // create copy
-      onc.NetworkConfigurations = [config]
-      onc.Certificates = certs
-      return onc
+      return {
+        'Type': 'UnencryptedConfiguration',
+        'Certificates': certificates,
+        'NetworkConfigurations': [networkConfiguration]
+      }
     }
-    
+
+
     /**
      * Create UUID (from Stackoverflow).
      */
@@ -365,6 +370,7 @@
             (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
           )
     }
+
 
     /**
      * Replace newlines with explicit `\n` and filter out comments
@@ -379,6 +385,7 @@
       }
       return out
     }
+
 
     /**
      * Find all certificates in a string and extract them
@@ -395,6 +402,7 @@
       return cas
     }
 
+
     /**
      * Construct certificates in the ONC format
      *
@@ -410,7 +418,7 @@
       if (certName) {
         let cert = keys[certName]
         if (!cert) {
-          alert("Please provide the file '" + certName + "' in 'Certificates and keys'")
+          alert(`Please provide the file '${certName}' in 'Certificates and keys'`)
         }
         let rawCerts = extractCas(cert)
         const format = (certType === 'Authority') ? 'X509' : 'PKCS12'
@@ -429,7 +437,7 @@
     }
     </script>
   </head>
-  
+
   <body onload="setHandler()">
     <div>
       <h1>ovpn2onc</h1>
