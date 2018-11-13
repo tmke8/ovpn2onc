@@ -9,7 +9,17 @@
 
     <style>
     #output {
-      background-color: lightgray;
+      background-color: #ddd;
+    }
+    #log {
+      width: 40em;
+      min-height: 7em;
+      border: 1px solid black;
+      overflow-x: auto;
+      background-color: #eee;
+    }
+    #log>p {
+      margin: 0px;
     }
     </style>
     <script>
@@ -37,6 +47,18 @@
 
 
     /**
+     * Return a function that logs text to the log output.
+     */
+    function getLogger () {
+      let logOutput = document.getElementById('log')
+      let logger = function (text) {
+        logOutput.innerHTML += `<p>${text}</p>`
+      }
+      return logger
+    }
+
+
+    /**
      * Read, convert and print result. This function calls other functions
      * to first read everything, then convert it and finally print the result.
      *
@@ -48,19 +70,36 @@
      * @param {Object} output           HTML element where the output should go
      */
     async function main (connName, ovpnFile, certificateFiles, output) {
+      log = getLogger()
       if (connName === '') {
+        log('connName is empty')
         alert('Please specify a name for the connection.')
         return
       }
-      console.log(ovpnFile.size + ' bytes')
+      log(`Size of OVPN file: ${ovpnFile.size} bytes`)
       let ovpnContent = await readFile(ovpnFile)
-      let [ovpn, keys] = parseOvpn(ovpnContent)
-      console.log(ovpn)
+      let ovpn
+      let keys
+      try {
+        [ovpn, keys] = parseOvpn(ovpnContent)
+      } catch (err) {
+        log(err)
+        return
+      }
+      log("Parsed config:")
+      log(JSON.stringify(ovpn))
       for (const certificateFile of certificateFiles) {
         keys[certificateFile.name] = await readFile(certificateFile)
       }
-      let onc = constructOnc(connName, ovpn, keys)
+      let onc
+      try {
+        onc = constructOnc(connName, ovpn, keys)
+      } catch (err) {
+        log(err)
+        return
+      }
       output.value = JSON.stringify(onc, null, 2)
+      log('All done!')
     }
 
 
@@ -97,6 +136,7 @@
      *                 the keys.
      */
     function parseOvpn (str) {
+      log = getLogger()
       let ovpn = {}
       let keys = {}
       // define regexes for properties, opening xml tag and closing xml tag
@@ -113,7 +153,10 @@
 
       for (let line of lines) {
         // skip line if it is empty or begins with '#' or ';'
-        if (!line || line.match(/^\s*[;#]/)) continue
+        if (!line || line.match(/^\s*[;#]/)) {
+          log(`Skipped line: "${line}"`)
+          continue
+        }
         if (inXml) {  // an XML tag was opened and hasn't been closed yet
           const xmlMatch = line.match(reXmlClose)
           if (!xmlMatch) {
@@ -142,6 +185,7 @@
           // an xml tag was opened
           inXml = true
           xmlTag = xmlMatch[1]
+          log(`XML tag was opened: "${xmlTag}"`)
           continue
         }
         // check if the line contains a property
@@ -151,8 +195,10 @@
         const key = makeSafe(match[1])
         const value = match[2] ? (match[3] || '') : true
         ovpn[key] = value
+        log(`Found: ${key} = ${value}`)
       }
 
+      log('Finished parsing')
       return [ovpn, keys]
     }
 
@@ -223,7 +269,7 @@
       let certs = []
 
       // Server certificate
-      // TODO: check whether the type should be 'Authority'
+      // TODO: confirm that the type should be 'Authority'
       let [cas, caGuids] = constructCerts(keys, keyNames.certificateAuthorities,
                                           'Authority')
       params['ServerCARefs'] = caGuids
@@ -249,6 +295,7 @@
         let keyString = keys[authKey[0]]
         if (!keyString) {
           alert(`Please provide the file '${authKey[0]}' in 'Certificates and keys'`)
+          throw `Couldn't find the key for ${authKey[0]}`
         }
         params['TLSAuthContents'] = convertKey(keyString)
         if (authKey[1]) params['KeyDirection'] = authKey[1]
@@ -313,6 +360,8 @@
               value = raw
           }
           params[oncName] = value
+        } else {
+          log(`Value for '${ovpnName}' not specified.`)
         }
       }
       conditionalSet('port', 'Port', 'int')
@@ -398,12 +447,15 @@
      * Find all certificates in a string and extract them
      */
     function extractCas (str) {
+      log = getLogger()
       let splits = str.replace(/\n/g, '').split('-----BEGIN CERTIFICATE-----')
-      console.log(splits)
       let cas = []
       for (const s of splits) {
         if (s.includes('-----END CERTIFICATE-----')) {
-          cas.push(s.split('-----END CERTIFICATE-----')[0])
+          let extractedCa = s.split('-----END CERTIFICATE-----')[0]
+          log("Extracted CA:")
+          log(extractedCa)
+          cas.push(extractedCa)
         }
       }
       return cas
@@ -426,6 +478,7 @@
         let cert = keys[certName]
         if (!cert) {
           alert(`Please provide the file '${certName}' in 'Certificates and keys'`)
+          throw `Couldn't find a certificate for ${certName}`
         }
         let rawCerts = extractCas(cert)
         const format = (certType === 'Authority') ? 'X509' : 'PKCS12'
@@ -465,8 +518,14 @@
       <button id="convertbutton" type="button">Convert</button>
     </div>
     <div>
-      <p>Output (copy this into a new file and load it in ChromeOS)</p>
-      <textarea readonly id="output" wrap="off" rows="20" cols="100"></textarea>
+      <p><b>Output</b> (copy this into a new file and load it in ChromeOS)</p>
+      <textarea readonly id="output" wrap="off" rows="40" cols="100"></textarea>
+    </div>
+    <div>
+      <p>&nbsp;</p>
+      <p>&nbsp;</p>
+      <p>Debugging info:</p>
+      <div id="log"></div>
     </div>
   </body>
 </html>
